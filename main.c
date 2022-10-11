@@ -90,7 +90,7 @@ add_new_route(in_addr_t       dest,
 	}
 
 	r->base    = dest;
-	r->mask    = (in_addr_t)-1 & dest;
+	r->mask    = (in_addr_t)-1;
 	r->gateway = gateway;
 	r->weight  = weight;
 	r->if_addr = if_addr;
