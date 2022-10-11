@@ -24,8 +24,7 @@ logger(unsigned int level, const char* file, int line, const char* fmt, ...)
 #define LOG_ERROR(fmt, ...)                                                    \
 	logger(LERROR, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
 
-#define LOG_WARN(fmt, ...)                                                    \
-	logger(LWARN, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define LOG_WARN(fmt, ...) logger(LWARN, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
 
 #define LOG_INFO(fmt, ...) logger(LINFO, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
 

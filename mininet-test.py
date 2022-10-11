@@ -18,9 +18,9 @@ class SingleSwitchTopo(Topo):
         #     self.addLink(host, switch)
         h1 = self.addHost('h1')
         h2 = self.addHost('h2')
-        # h3 = self.addHost('h3')
+        h3 = self.addHost('h3')
         self.addLink(h1, h2)
-        # self.addLink(h1, h3)
+        self.addLink(h2, h3)
 
 
 def execute_test_program(h1):
@@ -44,7 +44,7 @@ def simpleTest():
     net.start()
     execute_test_program(net.get('h1'))
     execute_test_program(net.get('h2'))
-    # execute_test_program(net.get('h3'))
+    execute_test_program(net.get('h3'))
     print("Dumping host connections")
     dumpNodeConnections(net.hosts)
     print("Testing network connectivity")

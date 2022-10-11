@@ -1,4 +1,5 @@
 #include "logger/logger.h"
+#include "vector/vector.h"
 #include <arpa/inet.h>
 #include <errno.h>
 #include <ifaddrs.h>
@@ -7,6 +8,7 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <printf.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -21,6 +23,85 @@
 #define SEND_TRY 3
 
 #define MAX_MESSAGE_SIZE 4096
+
+struct record {
+	enum {
+		RWITHDRAW = 0,
+		RNEXT_HOP,
+		RHOST_PATH,
+	} type;
+	in_addr_t addr;
+	in_addr_t gateway;
+};
+
+struct message {
+	unsigned int size;
+	enum {
+		MADD = 0,
+		MWITHDRAW,
+	} type;
+	unsigned int  record_len;
+	struct record record_list[];
+};
+
+struct routing_entry {
+	int             weight;
+	in_addr_t       mask;
+	in_addr_t       base;
+	in_addr_t       gateway;
+	struct ifaddrs* if_addr;
+};
+
+INITIALIZE_VECTOR(routing_vector, struct routing_entry)
+
+routing_vector routing_table;
+
+int
+route_aggregation(in_addr_t* mask, in_addr_t* base, in_addr_t* new)
+{
+	// TODO(134ARG): to be implemented
+	if ((*new&* mask) == (*base & *mask)) {
+		return 0;
+	}
+	return 1;
+}
+
+int
+add_new_route(in_addr_t       dest,
+              in_addr_t       gateway,
+              unsigned int    weight,
+              struct ifaddrs* if_addr)
+{
+	struct routing_entry r;
+
+	in_addr_t mask = 0;
+	in_addr_t base = 0;
+	in_addr_t new  = 0;
+
+	for (size_t i = 0; i < routing_table.length; ++i) {
+		CHECK_OK(routing_vector_get(&routing_table, i, &r));
+		mask    = r.mask;
+		base    = r.base;
+		new     = dest;
+		int ret = route_aggregation(&mask, &base, &new);
+		if (!ret && r.gateway == gateway && r.if_addr == if_addr) {
+			return 0;
+		}
+	}
+
+	r.base    = dest;
+	r.mask    = (in_addr_t)-1 & dest;
+	r.gateway = gateway;
+	r.weight  = weight;
+	r.if_addr = if_addr;
+	routing_vector_push(&routing_table, r);
+
+	return 0;
+}
+
+// use inet_pton() to set ip address, example:
+// 	struct sockaddr_in* addr = (struct sockaddr_in*)&ifr.ifr_addr;
+// 	inet_pton(AF_INET, "10.12.0.1", &addr->sin_addr);
 
 int
 get_addr_str(struct sockaddr* ifa_addr, char* str)
@@ -151,7 +232,7 @@ broadcast_message(struct ifaddrs* ifap, char* msg, int len)
 		struct sockaddr_in* if_addr = NULL;
 
 		if (ifap->ifa_flags & IFF_BROADCAST) {
-			if_addr            = (struct sockaddr_in*)ifap->ifa_broadaddr;
+			if_addr              = (struct sockaddr_in*)ifap->ifa_broadaddr;
 			int broadcast_enable = 1;
 			int ret              = setsockopt(socketfd,
                                  SOL_SOCKET,
@@ -168,7 +249,8 @@ broadcast_message(struct ifaddrs* ifap, char* msg, int len)
 		           ifap->ifa_flags & IFF_LOOPBACK) {
 			if_addr = (struct sockaddr_in*)ifap->ifa_dstaddr;
 		} else {
-			LOG_INFO("[%s] skipping current interface for unsupported flag", ifap->ifa_name);
+			LOG_INFO("[%s] skipping current interface for unsupported flag",
+			         ifap->ifa_name);
 			goto NEXT_ITER;
 		}
 
@@ -229,9 +311,8 @@ recv_message(in_addr_t in_addr, char* buffer, int len)
 	recv_addr.sin_port        = htons(BROADCAST_PORT);
 	recv_addr.sin_addr.s_addr = in_addr;
 
-	if (bind(socketfd,
-	         (const struct sockaddr*)&recv_addr,
-	         sizeof(recv_addr)) < 0) {
+	if (bind(socketfd, (const struct sockaddr*)&recv_addr, sizeof(recv_addr)) <
+	    0) {
 		LOG_ERROR("failed to bind the socket. errno: %d", errno);
 		return -1;
 	}
@@ -257,9 +338,19 @@ recv_message(in_addr_t in_addr, char* buffer, int len)
 }
 
 int
+recv_message_from_if(struct ifaddrs* if_addr, char* buffer, int len)
+{
+	return recv_message(
+	    ((struct sockaddr_in*)if_addr->ifa_addr)->sin_addr.s_addr,
+	    buffer,
+	    len);
+}
+
+int
 main(void)
 {
 	set_log_level(LDEBUG);
+	routing_table = make_routing_vector();
 
 	char test_buffer[20];
 	memset(test_buffer, 0, 20);
@@ -282,6 +373,7 @@ main(void)
 		LOG_WARN("nothing received.");
 	}
 	freeifaddrs(ifap);
+	clean_routing_vector(&routing_table);
 
 	return 0;
 }
