@@ -13,21 +13,14 @@
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/types.h>
-
-// union seg4_addr {
-// 	struct {
-// 		u_int8_t net;
-// 		u_int8_t host;
-// 		u_int8_t lh;
-// 		u_int8_t imp;
-// 	} seg;
-// 	u_int32_t s_addr;
-// };
+#include <unistd.h>
 
 #define BROADCAST_PORT 5151
 // #define RECV_PORT      5152
 
 #define SEND_TRY 3
+
+#define MAX_MESSAGE_SIZE 4096
 
 int
 get_addr_str(struct sockaddr* ifa_addr, char* str)
@@ -123,6 +116,12 @@ print_ifaddrs(struct ifaddrs* ifap)
 
 		if (ifap->ifa_flags & IFF_BROADCAST) {
 			printf("interface type: broadcast\n");
+			struct sockaddr* baddr = ifap->ifa_broadaddr;
+			if (get_addr_str(baddr, host)) {
+				printf("broadcast address: no\n");
+			} else {
+				printf("broadcast address: %s\n", host);
+			}
 		} else if (ifap->ifa_flags & IFF_POINTOPOINT) {
 			printf("interface type: point to point\n");
 		} else if (ifap->ifa_flags & IFF_LOOPBACK) {
@@ -147,12 +146,12 @@ broadcast_message(struct ifaddrs* ifap, char* msg, int len)
 	}
 
 	while (ifap) {
-		struct sockaddr_in server_addr;
-		memset(&server_addr, 0, sizeof(server_addr));
-		struct sockaddr_in* dest_addr = NULL;
+		struct sockaddr_in dest_addr;
+		memset(&dest_addr, 0, sizeof(dest_addr));
+		struct sockaddr_in* if_addr = NULL;
 
 		if (ifap->ifa_flags & IFF_BROADCAST) {
-			dest_addr            = (struct sockaddr_in*)ifap->ifa_broadaddr;
+			if_addr            = (struct sockaddr_in*)ifap->ifa_broadaddr;
 			int broadcast_enable = 1;
 			int ret              = setsockopt(socketfd,
                                  SOL_SOCKET,
@@ -160,21 +159,22 @@ broadcast_message(struct ifaddrs* ifap, char* msg, int len)
                                  &broadcast_enable,
                                  sizeof(broadcast_enable));
 			if (ret < 0) {
-				LOG_WARN("[%s] can not set broadcast enabled. SKIP",
-				         ifap->ifa_name);
+				LOG_WARN("[%s] can not set broadcast enabled. errno: %d. SKIP",
+				         ifap->ifa_name,
+				         errno);
 				goto NEXT_ITER;
 			}
 		} else if (ifap->ifa_flags & IFF_POINTOPOINT ||
 		           ifap->ifa_flags & IFF_LOOPBACK) {
-			dest_addr = (struct sockaddr_in*)ifap->ifa_dstaddr;
+			if_addr = (struct sockaddr_in*)ifap->ifa_dstaddr;
 		} else {
-			LOG_INFO("[%s] skipping current interface", ifap->ifa_name);
+			LOG_INFO("[%s] skipping current interface for unsupported flag", ifap->ifa_name);
 			goto NEXT_ITER;
 		}
 
-		server_addr.sin_family      = AF_INET;
-		server_addr.sin_port        = htons(BROADCAST_PORT);
-		server_addr.sin_addr.s_addr = dest_addr->sin_addr.s_addr;
+		dest_addr.sin_family      = AF_INET;
+		dest_addr.sin_port        = htons(BROADCAST_PORT);
+		dest_addr.sin_addr.s_addr = if_addr->sin_addr.s_addr;
 
 		int retry = 0;
 		while (retry < SEND_TRY) {
@@ -182,8 +182,8 @@ broadcast_message(struct ifaddrs* ifap, char* msg, int len)
 			                 msg,
 			                 len,
 			                 MSG_CONFIRM,
-			                 (const struct sockaddr*)&server_addr,
-			                 sizeof(server_addr));
+			                 (const struct sockaddr*)&dest_addr,
+			                 sizeof(dest_addr));
 			if (ret < 0) {
 				++retry;
 				LOG_WARN("[%s] message send failed. times %d, errno %d",
@@ -206,17 +206,18 @@ broadcast_message(struct ifaddrs* ifap, char* msg, int len)
 		ifap = ifap->ifa_next;
 	}
 
+	close(socketfd);
 	return 0;
 }
 
 int
-recv_message(char* buffer, int len)
+recv_message(in_addr_t in_addr, char* buffer, int len)
 {
 	int socketfd;
 
-	struct sockaddr_in server_addr;
+	struct sockaddr_in recv_addr;
 	struct sockaddr_in sender_addr;
-	memset(&server_addr, 0, sizeof(server_addr));
+	memset(&recv_addr, 0, sizeof(recv_addr));
 	memset(&sender_addr, 0, sizeof(sender_addr));
 
 	if ((socketfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
@@ -224,13 +225,13 @@ recv_message(char* buffer, int len)
 		return -1;
 	}
 
-	server_addr.sin_family      = AF_INET;
-	server_addr.sin_port        = htons(BROADCAST_PORT);
-	server_addr.sin_addr.s_addr = INADDR_ANY;
+	recv_addr.sin_family      = AF_INET;
+	recv_addr.sin_port        = htons(BROADCAST_PORT);
+	recv_addr.sin_addr.s_addr = in_addr;
 
 	if (bind(socketfd,
-	         (const struct sockaddr*)&server_addr,
-	         sizeof(server_addr)) < 0) {
+	         (const struct sockaddr*)&recv_addr,
+	         sizeof(recv_addr)) < 0) {
 		LOG_ERROR("failed to bind the socket. errno: %d", errno);
 		return -1;
 	}
@@ -275,7 +276,7 @@ main(void)
 	struct ifaddrs* filtered_ifap = get_valid_ifs(ifap, 0, 1);
 	print_ifaddrs(filtered_ifap);
 	broadcast_message(filtered_ifap, "something", sizeof("something"));
-	if (recv_message(test_buffer, 20) > 0) {
+	if (recv_message(INADDR_ANY, test_buffer, MAX_MESSAGE_SIZE) > 0) {
 		LOG_INFO("received message: %s", test_buffer);
 	} else {
 		LOG_WARN("nothing received.");
