@@ -85,6 +85,17 @@
 		return OK;                                                             \
 	}                                                                          \
                                                                                \
+	static enum status VECTOR##_get_pointer(struct VECTOR* v,                  \
+	                                        size_t         index,              \
+	                                        T**            element)            \
+	{                                                                          \
+		if (index >= v->length) {                                              \
+			return ERR_INDEX_OUT_OF_BOUND;                                     \
+		}                                                                      \
+		*element = &(v->data[index]);                                          \
+		return OK;                                                             \
+	}                                                                          \
+                                                                               \
 	static enum status VECTOR##_set(struct VECTOR* v, size_t index, T element) \
 	{                                                                          \
 		if (index >= v->length) {                                              \

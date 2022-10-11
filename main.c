@@ -72,29 +72,28 @@ add_new_route(in_addr_t       dest,
               unsigned int    weight,
               struct ifaddrs* if_addr)
 {
-	struct routing_entry r;
+	struct routing_entry* r;
 
 	in_addr_t mask = 0;
 	in_addr_t base = 0;
 	in_addr_t new  = 0;
 
 	for (size_t i = 0; i < routing_table.length; ++i) {
-		CHECK_OK(routing_vector_get(&routing_table, i, &r));
-		mask    = r.mask;
-		base    = r.base;
+		CHECK_OK(routing_vector_get_pointer(&routing_table, i, &r));
+		mask    = r->mask;
+		base    = r->base;
 		new     = dest;
 		int ret = route_aggregation(&mask, &base, &new);
-		if (!ret && r.gateway == gateway && r.if_addr == if_addr) {
+		if (!ret && r->gateway == gateway && r->if_addr == if_addr) {
 			return 0;
 		}
 	}
 
-	r.base    = dest;
-	r.mask    = (in_addr_t)-1 & dest;
-	r.gateway = gateway;
-	r.weight  = weight;
-	r.if_addr = if_addr;
-	routing_vector_push(&routing_table, r);
+	r->base    = dest;
+	r->mask    = (in_addr_t)-1 & dest;
+	r->gateway = gateway;
+	r->weight  = weight;
+	r->if_addr = if_addr;
 
 	return 0;
 }
