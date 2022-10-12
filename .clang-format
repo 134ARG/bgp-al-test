@@ -1,0 +1,40 @@
+---
+Language: Cpp
+BasedOnStyle:  Google
+AlignConsecutiveAssignments: true
+AlignConsecutiveDeclarations: true
+AlignConsecutiveMacros: true
+AlignEscapedNewlines: Right
+AlignOperands: true
+AllowAllArgumentsOnNextLine: false
+AllowAllParametersOfDeclarationOnNextLine: false
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AlwaysBreakAfterReturnType: TopLevelDefinitions
+BinPackArguments: false
+BinPackParameters: false
+BraceWrapping:
+  AfterControlStatement: false
+  AfterFunction: true
+BreakBeforeBraces: Linux
+BreakStringLiterals: false
+ContinuationIndentWidth: 4
+DeriveLineEnding: false
+DerivePointerAlignment: false
+ForEachMacros:
+  - LIST_FOREACH_SAFE
+  - LIST_FOREACH
+IncludeBlocks: Merge
+IncludeCategories:
+  - Regex: '.*'
+IncludeIsMainRegex: "$"
+IndentCaseLabels: false
+IndentWidth: 4
+PenaltyBreakBeforeFirstCallParameter: 100
+PenaltyReturnTypeOnItsOwnLine: 100
+SpacesInContainerLiterals: false
+Standard: Latest
+UseTab: ForIndentation  
+TabWidth: 4
+---
