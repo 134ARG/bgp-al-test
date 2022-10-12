@@ -1,5 +1,5 @@
-#include "./mem/mem_utils.h"
 #include "logger/logger.h"
+#include "mem/mem_utils.h"
 #include "vector/vector.h"
 #include <arpa/inet.h>
 #include <bits/pthreadtypes.h>
@@ -389,7 +389,6 @@ broadcast_message_from_if(struct ifaddrs* ifap, char* msg, int len)
 		return -1;
 	}
 
-	// while (ifap) {
 	struct sockaddr_in dest_addr;
 	memset(&dest_addr, 0, sizeof(dest_addr));
 	struct sockaddr_in* if_addr = NULL;
@@ -406,7 +405,7 @@ broadcast_message_from_if(struct ifaddrs* ifap, char* msg, int len)
 			LOG_WARN("[%s] can not set broadcast enabled. errno: %d. SKIP",
 			         ifap->ifa_name,
 			         errno);
-			goto NEXT_ITER;
+			goto TERM;
 		}
 	} else if (ifap->ifa_flags & IFF_POINTOPOINT ||
 	           ifap->ifa_flags & IFF_LOOPBACK) {
@@ -414,7 +413,7 @@ broadcast_message_from_if(struct ifaddrs* ifap, char* msg, int len)
 	} else {
 		LOG_INFO("[%s] skipping current interface for unsupported flag",
 		         ifap->ifa_name);
-		goto NEXT_ITER;
+		goto TERM;
 	}
 
 	dest_addr.sin_family      = AF_INET;
@@ -447,9 +446,8 @@ broadcast_message_from_if(struct ifaddrs* ifap, char* msg, int len)
 		LOG_INFO("[%s] message sent", ifap->ifa_name);
 	}
 
-NEXT_ITER:
+TERM:
 	ifap = ifap->ifa_next;
-	// }
 	return 0;
 }
 
