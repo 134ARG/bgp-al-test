@@ -23,10 +23,8 @@ ContinuationIndentWidth: 4
 DeriveLineEnding: false
 DerivePointerAlignment: false
 ForEachMacros:
-  - HASH_ITER
-  - STRING_ITER
-  - LIST_ITER
-  - STRING_ITER_FROM
+  - LIST_FOREACH_SAFE
+  - LIST_FOREACH
 IncludeBlocks: Merge
 IncludeCategories:
   - Regex: '.*'

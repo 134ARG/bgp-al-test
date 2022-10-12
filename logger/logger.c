@@ -13,7 +13,12 @@ set_log_level(enum log_level level)
 }
 
 void
-logger(unsigned int level, const char* file, int line, const char* fmt, ...)
+logger(unsigned int level,
+       const char*  file,
+       const char*  func,
+       int          line,
+       const char*  fmt,
+       ...)
 {
 	if (level < current_log_level) {
 		return;
@@ -27,7 +32,7 @@ logger(unsigned int level, const char* file, int line, const char* fmt, ...)
 	va_list args;
 	va_start(args, fmt);
 
-	fprintf(stderr, "%s: %s:%d: ", log_levels[level], file, line);
+	fprintf(stderr, "%s: %s:%d: %s(): ", log_levels[level], file, line, func);
 	vfprintf(stderr, fmt, args);
 	fprintf(stderr, "\n");
 

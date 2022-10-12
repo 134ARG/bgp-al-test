@@ -17,18 +17,23 @@ enum log_level {
 
 void set_log_level(enum log_level level);
 
-void
-logger(unsigned int level, const char* file, int line, const char* fmt, ...)
-    __attribute__((format(printf, 4, 5)));
+void logger(unsigned int level,
+            const char*  file,
+            const char*  func,
+            int          line,
+            const char*  fmt,
+            ...) __attribute__((format(printf, 5, 6)));
 
 #define LOG_ERROR(fmt, ...)                                                    \
-	logger(LERROR, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+	logger(LERROR, __FILE__, __func__, __LINE__, fmt, ##__VA_ARGS__)
 
-#define LOG_WARN(fmt, ...) logger(LWARN, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define LOG_WARN(fmt, ...)                                                     \
+	logger(LWARN, __FILE__, __func__, __LINE__, fmt, ##__VA_ARGS__)
 
-#define LOG_INFO(fmt, ...) logger(LINFO, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define LOG_INFO(fmt, ...)                                                     \
+	logger(LINFO, __FILE__, __func__, __LINE__, fmt, ##__VA_ARGS__)
 
 #define LOG_DEBUG(fmt, ...)                                                    \
-	logger(LDEBUG, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+	logger(LDEBUG, __FILE__, __func__, __LINE__, fmt, ##__VA_ARGS__)
 
 #endif  // ZLISP_LOGGER_H
