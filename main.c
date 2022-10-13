@@ -405,7 +405,7 @@ broadcast_message_from_if(struct ifaddrs* ifap, char* msg, int len)
 			LOG_WARN("[%s] can not set broadcast enabled. errno: %d. SKIP",
 			         ifap->ifa_name,
 			         errno);
-			goto TERM;
+			return -1;
 		}
 	} else if (ifap->ifa_flags & IFF_POINTOPOINT ||
 	           ifap->ifa_flags & IFF_LOOPBACK) {
@@ -413,7 +413,7 @@ broadcast_message_from_if(struct ifaddrs* ifap, char* msg, int len)
 	} else {
 		LOG_INFO("[%s] skipping current interface for unsupported flag",
 		         ifap->ifa_name);
-		goto TERM;
+		return -1;
 	}
 
 	dest_addr.sin_family      = AF_INET;
@@ -446,8 +446,6 @@ broadcast_message_from_if(struct ifaddrs* ifap, char* msg, int len)
 		LOG_INFO("[%s] message sent", ifap->ifa_name);
 	}
 
-TERM:
-	ifap = ifap->ifa_next;
 	return 0;
 }
 
