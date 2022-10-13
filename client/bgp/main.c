@@ -1,4 +1,5 @@
 #include "protocol/bgp/message.h"
+#include "routing/bgp/routing.h"
 #include "utils/logger/logger.h"
 #include "utils/mem/mem_utils.h"
 #include <arpa/inet.h>
@@ -30,170 +31,6 @@
 #define MAX_MESSAGE_SIZE 4096
 
 u_int64_t host_id = 0;
-
-struct route_entry {
-	u_int32_t       weight;
-	in_addr_t       mask;
-	in_addr_t       base;
-	in_addr_t       gateway;
-	struct ifaddrs* if_addr;
-	LIST_ENTRY(route_entry) entries;
-};
-
-int
-routing_entry_eq(struct route_entry* a, struct route_entry* b)
-{
-	return (a->base == b->base) && (a->mask == b->mask) &&
-	       (a->gateway == b->gateway) && (a->if_addr == b->if_addr) &&
-	       (a->weight == b->weight);
-}
-
-int
-copy_routing_entry(struct route_entry* src, struct route_entry* dest)
-{
-	if (!src || !dest) {
-		LOG_ERROR("null pointer when copying routing entry");
-		return -1;
-	}
-	dest->weight  = src->weight;
-	dest->mask    = src->mask;
-	dest->base    = src->base;
-	dest->gateway = src->gateway;
-	dest->if_addr = src->if_addr;
-	return 0;
-}
-
-#ifndef LIST_FOREACH_SAFE
-#define LIST_FOREACH_SAFE(var, head, field, tvar)                              \
-	for ((var) = LIST_FIRST((head));                                           \
-	     (var) && ((tvar) = LIST_NEXT((var), field), 1);                       \
-	     (var) = (tvar))
-#endif
-
-LIST_HEAD(, route_entry) routing_table;
-
-void
-log_routing_table()
-{
-	struct route_entry* current;
-
-	union seg4_addr {
-		struct {
-			u_int8_t seg1;
-			u_int8_t seg2;
-			u_int8_t seg3;
-			u_int8_t seg4;
-		} addr;
-		in_addr_t raw;
-	};
-
-	LOG_INFO("start logging routing table");
-	LIST_FOREACH (current, &routing_table, entries) {
-		union seg4_addr base = {.raw = current->base};
-		LOG_INFO("\tbase:%d:%d:%d:%d",
-		         base.addr.seg1,
-		         base.addr.seg2,
-		         base.addr.seg3,
-		         base.addr.seg4);
-		union seg4_addr gateway = {.raw = current->gateway};
-		LOG_INFO("\tgateway:%d:%d:%d:%d",
-		         gateway.addr.seg1,
-		         gateway.addr.seg2,
-		         gateway.addr.seg3,
-		         gateway.addr.seg4);
-		LOG_INFO("\tweight: %d", current->weight);
-		LOG_INFO("\tif_name: %s", current->if_addr->ifa_name);
-	}
-	LOG_INFO("logging routing table finished");
-}
-
-void
-free_routing_table()
-{
-	struct route_entry* current;
-	struct route_entry* temp;
-	LIST_FOREACH_SAFE (current, &routing_table, entries, temp) {
-		free(current);
-	}
-	LIST_INIT(&routing_table);
-}
-
-int
-route_aggregate(struct route_entry* new, struct route_entry* old)
-{
-	// TODO(134ARG): to be implemented
-	return 1;
-}
-
-int
-route_disaggregate(struct route_entry* new, struct route_entry* old)
-{
-	// TODO(134ARG): to be implemented
-	return 1;
-}
-
-enum add_status {
-	SNEW = 0,
-	SEXISTED,
-};
-
-enum add_status
-add_new_route(struct route_entry* new)
-{
-	struct route_entry* current;
-
-	LIST_FOREACH (current, &routing_table, entries) {
-		int ret = route_aggregate(new, current);
-		if (!ret) {
-			return SEXISTED;
-		}
-
-		if (routing_entry_eq(new, current)) {
-			return SEXISTED;
-		}
-
-		if ((new->base == current->base) &&
-		    (!strcmp(new->if_addr->ifa_name, current->if_addr->ifa_name)) &&
-		    (new->weight < current->weight)) {
-			copy_routing_entry(new, current);
-			return SEXISTED;
-		}
-	}
-
-	struct route_entry* copy = malloc(sizeof(struct route_entry));
-	memcpy(copy, new, sizeof(struct route_entry));
-
-	LIST_INSERT_HEAD(&routing_table, copy, entries);
-
-	return SNEW;
-}
-
-enum withdraw_status {
-	SWITHDREW = 0,
-	SNO,
-};
-
-int
-withdraw_route(struct route_entry* withdraw)
-{
-	struct route_entry* current;
-	struct route_entry* temp;
-
-	LIST_FOREACH_SAFE (current, &routing_table, entries, temp) {
-		int ret = route_disaggregate(withdraw, current);
-		if (!ret) {
-			return SWITHDREW;
-		}
-
-		if (withdraw->base == current->base) {
-			LIST_REMOVE(current, entries);
-			free(current);
-			return SWITHDREW;
-		}
-	}
-
-	return SNO;
-}
 
 // use inet_pton() to set ip address, example:
 // 	struct sockaddr_in* addr = (struct sockaddr_in*)&ifr.ifr_addr;
@@ -546,16 +383,12 @@ check_if_valid_ASPATH(struct update_message* m_ptr)
 }
 
 int
-decision(struct ifaddrs* all_ifs,
-         struct ifaddrs* recv_if,
-         char*           buffer,
-         int             len)
+decision(struct ifaddrs*        all_ifs,
+         struct ifaddrs*        recv_if,
+         struct update_message* m_ptr_own,
+         struct routing_table*  table)
 {
-	struct update_message* m_ptr = (struct update_message*)buffer;
-	if (m_ptr->size > len) {
-		LOG_ERROR("incompelete message. parsing abort.");
-		return -1;
-	}
+	CLEANUP_FREE struct update_message* m_ptr = m_ptr_own;
 
 	if (!check_if_valid_ASPATH(m_ptr)) {
 		LOG_INFO(
@@ -568,7 +401,7 @@ decision(struct ifaddrs* all_ifs,
 
 	if (m_ptr->type == MWITHDRAW) {
 		LOG_INFO("WITHDRAW update.");
-		if (withdraw_route(&new_route) == SWITHDREW) {
+		if (withdraw_route(table, &new_route) == SWITHDREW) {
 			LOG_INFO("WITHDRAW finished. start broadcast to peers");
 			broadcast_update(all_ifs, m_ptr);
 		} else {
@@ -577,7 +410,7 @@ decision(struct ifaddrs* all_ifs,
 
 	} else if (m_ptr->type == MADD) {
 		LOG_INFO("ADD update received.");
-		if (add_new_route(&new_route) == SNEW) {
+		if (add_new_route(table, &new_route) == SNEW) {
 			LOG_INFO("ADD finished. start broadcast to peers");
 			m_ptr = add_aspath(m_ptr, host_id);
 			++(m_ptr->weight);
@@ -622,11 +455,19 @@ find_recv_if(struct ifaddrs* all_ifs, struct sockaddr_in* addr)
 	return NULL;
 }
 
+struct thread_arg {
+	struct ifaddrs*        all_ifs;
+	struct routing_table*  table;
+	struct update_message* m_ptr_own;
+	struct sockaddr_in     sender_addr;
+};
+
 void*
 receive_main_loop(void* arg)
 {
 	pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, NULL);
-	struct ifaddrs* all_ifs = (struct ifaddrs*)arg;
+	// struct ifaddrs* all_ifs = (struct ifaddrs*)arg;
+	struct thread_arg* args = (struct thread_arg*)arg;
 	while (1) {
 		char               buffer[MAX_MESSAGE_SIZE];
 		struct sockaddr_in sender_addr;
@@ -637,13 +478,17 @@ receive_main_loop(void* arg)
 			LOG_WARN("failed to receive message. skip.");
 		} else {
 			LOG_INFO("message received.");
-			struct ifaddrs* recv_if = find_recv_if(all_ifs, &sender_addr);
+			struct ifaddrs* recv_if = find_recv_if(args->all_ifs, &sender_addr);
 			if (!recv_if) {
 				LOG_WARN("message from unkonwn source. dispose.");
 			} else {
 				LOG_INFO("receiver found. start decision process.");
-				decision(all_ifs, recv_if, buffer, MAX_MESSAGE_SIZE);
-				log_routing_table();
+
+				decision(args->all_ifs,
+				         recv_if,
+				         make_message_from_buffer(buffer, MAX_MESSAGE_SIZE),
+				         args->table);
+				log_routing_table(args->table);
 			}
 		}
 		pthread_testcancel();
@@ -669,7 +514,9 @@ dispatch(struct ifaddrs* all_ifs, pthread_t* tid)
 
 // TODO(134ARG): refactor
 int
-execute_command(char command, struct ifaddrs* all_ifs)
+execute_command(char                  command,
+                struct ifaddrs*       all_ifs,
+                struct routing_table* table)
 {
 	const char self_broadcast_cmd    = 'b';
 	const char log_routing_table_cmd = 'r';
@@ -679,7 +526,7 @@ execute_command(char command, struct ifaddrs* all_ifs)
 	if (command == self_broadcast_cmd) {
 		self_update(all_ifs);
 	} else if (command == log_routing_table_cmd) {
-		log_routing_table();
+		log_routing_table(table);
 	} else if (command == quit_cmd) {
 		return -1;
 	} else if (command == enter) {
@@ -694,7 +541,9 @@ int
 main(void)
 {
 	set_log_level(LDEBUG);
-	LIST_INIT(&routing_table);
+
+	CLEANUP(free_routing_table) struct routing_table table;
+	LIST_INIT(&table);
 
 	char test_buffer[20];
 	memset(test_buffer, 0, 20);
@@ -731,7 +580,7 @@ main(void)
 	while (1) {
 		printf("cli host-%lu %s", host_id, prompt);
 		fgets(cmd, 20, stdin);
-		int ret = execute_command(cmd[0], selected_ifs);
+		int ret = execute_command(cmd[0], selected_ifs, &table);
 		if (ret) {
 			pthread_cancel(tid);
 			break;
@@ -740,7 +589,6 @@ main(void)
 
 CLEAN_UP:
 	freeifaddrs(ifap);
-	free_routing_table();
 
 	return 0;
 }

@@ -7,5 +7,6 @@ cc_binary(
        "//utils/logger",
        "//utils/mem",
        "//protocol/bgp",
+       "//routing/bgp",
     ],
 )

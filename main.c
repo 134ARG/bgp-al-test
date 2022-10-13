@@ -58,17 +58,17 @@ free_message(struct update_message* ptr)
 	free(ptr);
 }
 
-struct routing_entry {
+struct route_entry {
 	u_int32_t       weight;
 	in_addr_t       mask;
 	in_addr_t       base;
 	in_addr_t       gateway;
 	struct ifaddrs* if_addr;
-	LIST_ENTRY(routing_entry) entries;
+	LIST_ENTRY(route_entry) entries;
 };
 
 int
-routing_entry_eq(struct routing_entry* a, struct routing_entry* b)
+routing_entry_eq(struct route_entry* a, struct route_entry* b)
 {
 	return (a->base == b->base) && (a->mask == b->mask) &&
 	       (a->gateway == b->gateway) && (a->if_addr == b->if_addr) &&
@@ -76,7 +76,7 @@ routing_entry_eq(struct routing_entry* a, struct routing_entry* b)
 }
 
 int
-copy_routing_entry(struct routing_entry* src, struct routing_entry* dest)
+copy_routing_entry(struct route_entry* src, struct route_entry* dest)
 {
 	if (!src || !dest) {
 		LOG_ERROR("null pointer when copying routing entry");
@@ -97,12 +97,12 @@ copy_routing_entry(struct routing_entry* src, struct routing_entry* dest)
 	     (var) = (tvar))
 #endif
 
-LIST_HEAD(, routing_entry) routing_table;
+LIST_HEAD(, route_entry) routing_table;
 
 void
-log_routing_table()
+table()
 {
-	struct routing_entry* current;
+	struct route_entry* current;
 
 	union seg4_addr {
 		struct {
@@ -137,8 +137,8 @@ log_routing_table()
 void
 free_routing_table()
 {
-	struct routing_entry* current;
-	struct routing_entry* temp;
+	struct route_entry* current;
+	struct route_entry* temp;
 	LIST_FOREACH_SAFE (current, &routing_table, entries, temp) {
 		free(current);
 	}
@@ -167,14 +167,14 @@ add_aspath(struct update_message* m_ptr, u_int64_t new_host_id)
 }
 
 int
-route_aggregate(struct routing_entry* new, struct routing_entry* old)
+route_aggregate(struct route_entry* new, struct route_entry* old)
 {
 	// TODO(134ARG): to be implemented
 	return 1;
 }
 
 int
-route_disaggregate(struct routing_entry* new, struct routing_entry* old)
+route_disaggregate(struct route_entry* new, struct route_entry* old)
 {
 	// TODO(134ARG): to be implemented
 	return 1;
@@ -186,9 +186,9 @@ enum add_status {
 };
 
 enum add_status
-add_new_route(struct routing_entry* new)
+add_new_route(struct route_entry* new)
 {
-	struct routing_entry* current;
+	struct route_entry* current;
 
 	LIST_FOREACH (current, &routing_table, entries) {
 		int ret = route_aggregate(new, current);
@@ -208,8 +208,8 @@ add_new_route(struct routing_entry* new)
 		}
 	}
 
-	struct routing_entry* copy = malloc(sizeof(struct routing_entry));
-	memcpy(copy, new, sizeof(struct routing_entry));
+	struct route_entry* copy = malloc(sizeof(struct route_entry));
+	memcpy(copy, new, sizeof(struct route_entry));
 
 	LIST_INSERT_HEAD(&routing_table, copy, entries);
 
@@ -222,10 +222,10 @@ enum withdraw_status {
 };
 
 int
-withdraw_route(struct routing_entry* withdraw)
+withdraw_route(struct route_entry* withdraw)
 {
-	struct routing_entry* current;
-	struct routing_entry* temp;
+	struct route_entry* current;
+	struct route_entry* temp;
 
 	LIST_FOREACH_SAFE (current, &routing_table, entries, temp) {
 		int ret = route_disaggregate(withdraw, current);
@@ -567,10 +567,10 @@ self_update(struct ifaddrs* all_ifs)
 	return 0;
 }
 
-struct routing_entry
+struct route_entry
 make_routing_from_update(struct update_message* m_ptr, struct ifaddrs* if_addr)
 {
-	return (struct routing_entry){
+	return (struct route_entry){
 	    .weight  = m_ptr->weight,
 	    .base    = m_ptr->addr,
 	    .mask    = (in_addr_t)-1,
@@ -612,7 +612,7 @@ decision(struct ifaddrs* all_ifs,
 		return 0;
 	}
 
-	struct routing_entry new_route = make_routing_from_update(m_ptr, recv_if);
+	struct route_entry new_route = make_routing_from_update(m_ptr, recv_if);
 
 	if (m_ptr->type == MWITHDRAW) {
 		LOG_INFO("WITHDRAW update.");
@@ -691,7 +691,7 @@ receive_main_loop(void* arg)
 			} else {
 				LOG_INFO("receiver found. start decision process.");
 				decision(all_ifs, recv_if, buffer, MAX_MESSAGE_SIZE);
-				log_routing_table();
+				table();
 			}
 		}
 		pthread_testcancel();
@@ -727,7 +727,7 @@ execute_command(char command, struct ifaddrs* all_ifs)
 	if (command == self_broadcast_cmd) {
 		self_update(all_ifs);
 	} else if (command == log_routing_table_cmd) {
-		log_routing_table();
+		table();
 	} else if (command == quit_cmd) {
 		return -1;
 	} else if (command == enter) {
