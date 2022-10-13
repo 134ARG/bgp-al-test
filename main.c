@@ -770,7 +770,7 @@ main(void)
 	pthread_t tid;
 	if (dispatch(selected_ifs, &tid)) {
 		LOG_ERROR("thread creation failed. exit.");
-		return 0;
+		goto CLEAN_UP;
 	}
 
 	char        cmd[20];
@@ -786,6 +786,7 @@ main(void)
 		}
 	}
 
+CLEAN_UP:
 	freeifaddrs(ifap);
 	free_routing_table();
 
