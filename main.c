@@ -29,8 +29,6 @@
 
 #define MAX_MESSAGE_SIZE 4096
 
-struct ifaddrs* filtered_ifap = NULL;
-
 u_int64_t host_id = 0;
 
 struct update_message {
@@ -760,16 +758,17 @@ main(void)
 		LOG_ERROR("failed to get ifs. errno: %d", errno);
 		return 0;
 	}
-	filtered_ifap = get_valid_ifs(ifap, 0, 0);
 
-	print_ifaddrs(filtered_ifap);
+	struct ifaddrs* selected_ifs = get_valid_ifs(ifap, 0, 0);
 
-	unsigned int if_length = len_ifs(filtered_ifap);
+	print_ifaddrs(selected_ifs);
 
-	self_update(filtered_ifap);
+	unsigned int if_length = len_ifs(selected_ifs);
+
+	self_update(selected_ifs);
 
 	pthread_t tid;
-	if (dispatch(filtered_ifap, &tid)) {
+	if (dispatch(selected_ifs, &tid)) {
 		LOG_ERROR("thread creation failed. exit.");
 		return 0;
 	}
@@ -780,7 +779,7 @@ main(void)
 	while (1) {
 		printf("cli host-%lu %s", host_id, prompt);
 		fgets(cmd, 20, stdin);
-		int ret = execute_command(cmd[0], filtered_ifap);
+		int ret = execute_command(cmd[0], selected_ifs);
 		if (ret) {
 			pthread_cancel(tid);
 			break;
