@@ -24,7 +24,6 @@
 #include <unistd.h>
 
 #define BROADCAST_PORT 5151
-// #define RECV_PORT      5152
 
 #define SEND_TRY 3
 
@@ -354,32 +353,6 @@ self_update(struct ifaddrs* all_ifs)
 	return 0;
 }
 
-struct route_entry
-make_routing_from_update(struct update_message* m_ptr, struct ifaddrs* if_addr)
-{
-	return (struct route_entry){
-	    .weight  = m_ptr->weight,
-	    .base    = m_ptr->addr,
-	    .mask    = (in_addr_t)-1,
-	    .gateway = m_ptr->gateway,
-	    .if_addr = if_addr,
-	};
-}
-
-int
-check_if_valid_ASPATH(struct update_message* m_ptr)
-{
-	for (size_t i = 0; i < m_ptr->path_len; i++) {
-		if (m_ptr->ASPATH[i] == host_id) {
-			LOG_INFO("host id found in ASPATH. self: %lu, found: %lu",
-			         host_id,
-			         m_ptr->ASPATH[i]);
-			return 0;
-		}
-	}
-	return 1;
-}
-
 struct ifaddrs*
 find_recv_if(struct ifaddrs* all_ifs, struct sockaddr_in* addr)
 {
@@ -446,7 +419,7 @@ decision(void* arg_own)
 		LOG_INFO("receiver found. start decision process.");
 	}
 
-	if (!check_if_valid_ASPATH(m_ptr)) {
+	if (!check_if_valid_ASPATH(m_ptr, host_id)) {
 		LOG_INFO(
 		    "[%s] circle detected. invalid ASPATH. skip current update message.",
 		    recv_if->ifa_name);

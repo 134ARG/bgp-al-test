@@ -52,3 +52,17 @@ add_aspath(struct update_message* m_ptr_own, u_int64_t new_host_id)
 	free_message(m_ptr_own);
 	return new_p;
 }
+
+int
+check_if_valid_ASPATH(struct update_message* m_ptr, u_int64_t host_id)
+{
+	for (size_t i = 0; i < m_ptr->path_len; i++) {
+		if (m_ptr->ASPATH[i] == host_id) {
+			LOG_INFO("host id found in ASPATH. self: %lu, found: %lu",
+			         host_id,
+			         m_ptr->ASPATH[i]);
+			return 0;
+		}
+	}
+	return 1;
+}

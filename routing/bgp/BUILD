@@ -6,6 +6,7 @@ cc_library(
     hdrs = ["routing.h"],
     deps = [
         "//utils/logger",
+        "//protocol/bgp",
     ],
     visibility = ["//visibility:public"],
 )

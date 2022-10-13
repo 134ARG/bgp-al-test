@@ -2,6 +2,7 @@
 #ifndef BROBABLBGP_BGP_ROUTING_H
 #define BROBABLBGP_BGP_ROUTING_H
 
+#include "protocol/bgp/message.h"
 #include <netinet/in.h>
 #include <sys/queue.h>
 #include <sys/types.h>
@@ -23,6 +24,9 @@ LIST_HEAD(routing_table, route_entry);
 	     (var) && ((tvar) = LIST_NEXT((var), field), 1);                       \
 	     (var) = (tvar))
 #endif
+
+struct route_entry make_routing_from_update(struct update_message* m_ptr,
+                                            struct ifaddrs*        if_addr);
 
 int equal_route_entry(struct route_entry* a, struct route_entry* b);
 int copy_route_entry(struct route_entry* src, struct route_entry* dest);

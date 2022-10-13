@@ -26,4 +26,6 @@ void free_message(struct update_message* ptr);
 struct update_message* add_aspath(struct update_message* m_ptr,
                                   u_int64_t              new_host_id);
 
+int check_if_valid_ASPATH(struct update_message* m_ptr, u_int64_t host_id);
+
 #endif  // BROBABLBGP_BGP_MESSAGE_H

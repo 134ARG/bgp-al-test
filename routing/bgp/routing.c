@@ -139,3 +139,15 @@ withdraw_route(struct routing_table* table, struct route_entry* withdraw)
 
 	return SNO;
 }
+
+struct route_entry
+make_routing_from_update(struct update_message* m_ptr, struct ifaddrs* if_addr)
+{
+	return (struct route_entry){
+	    .weight  = m_ptr->weight,
+	    .base    = m_ptr->addr,
+	    .mask    = (in_addr_t)-1,
+	    .gateway = m_ptr->gateway,
+	    .if_addr = if_addr,
+	};
+}
