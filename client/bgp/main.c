@@ -80,11 +80,11 @@ get_valid_ifs(struct ifaddrs* ifap, int accept_ipv6, int accept_lo)
 		}
 
 		unsigned int flags = current_ifap->ifa_flags;
-		if (current_ifap->ifa_flags & IFF_BROADCAST) {
+		if (flags & IFF_BROADCAST) {
 			LOG_INFO("[%s] interface type: broadcast", ifname);
-		} else if (current_ifap->ifa_flags & IFF_POINTOPOINT) {
+		} else if (flags & IFF_POINTOPOINT) {
 			LOG_INFO("[%s] interface type: point to point", ifname);
-		} else if (current_ifap->ifa_flags & IFF_LOOPBACK) {
+		} else if (flags & IFF_LOOPBACK) {
 			LOG_INFO("[%s] interface type: loopback", ifname);
 			if (!accept_lo) {
 				invalid = 1;
@@ -498,8 +498,6 @@ receive_main_loop(void* arg)
 int
 dispatch(struct ifaddrs* all_ifs, pthread_t* tid)
 {
-	struct ifaddrs* current = all_ifs;
-
 	int ret = pthread_create(tid, NULL, receive_main_loop, (void*)all_ifs);
 	if (ret) {
 		LOG_ERROR("failed to create thread. abort.");
@@ -563,8 +561,6 @@ main(void)
 	struct ifaddrs* selected_ifs = get_valid_ifs(ifap, 0, 0);
 
 	print_ifaddrs(selected_ifs);
-
-	unsigned int if_length = len_ifs(selected_ifs);
 
 	self_update(selected_ifs);
 
