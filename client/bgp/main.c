@@ -330,11 +330,9 @@ self_update(struct ifaddrs* all_ifs)
 	struct ifaddrs*                     current = all_ifs;
 	CLEANUP_FREE struct update_message* m_ptr   = make_message();
 
-	m_ptr->type                = MADD;
-	m_ptr->weight              = 1;
-	struct update_message* new = add_aspath(m_ptr, host_id);
-	free(m_ptr);
-	m_ptr = new;
+	m_ptr->type   = MADD;
+	m_ptr->weight = 1;
+	m_ptr         = add_aspath(m_ptr, host_id);
 
 	while (current) {
 		m_ptr->addr = ((struct sockaddr_in*)current->ifa_addr)->sin_addr.s_addr;
@@ -382,50 +380,6 @@ check_if_valid_ASPATH(struct update_message* m_ptr)
 	return 1;
 }
 
-int
-decision(struct ifaddrs*        all_ifs,
-         struct ifaddrs*        recv_if,
-         struct update_message* m_ptr_own,
-         struct routing_table*  table)
-{
-	CLEANUP_FREE struct update_message* m_ptr = m_ptr_own;
-
-	if (!check_if_valid_ASPATH(m_ptr)) {
-		LOG_INFO(
-		    "[%s] circle detected. invalid ASPATH. skip current update message.",
-		    recv_if->ifa_name);
-		return 0;
-	}
-
-	struct route_entry new_route = make_routing_from_update(m_ptr, recv_if);
-
-	if (m_ptr->type == MWITHDRAW) {
-		LOG_INFO("WITHDRAW update.");
-		if (withdraw_route(table, &new_route) == SWITHDREW) {
-			LOG_INFO("WITHDRAW finished. start broadcast to peers");
-			broadcast_update(all_ifs, m_ptr);
-		} else {
-			LOG_INFO("No new update.");
-		}
-
-	} else if (m_ptr->type == MADD) {
-		LOG_INFO("ADD update received.");
-		if (add_new_route(table, &new_route) == SNEW) {
-			LOG_INFO("ADD finished. start broadcast to peers");
-			m_ptr = add_aspath(m_ptr, host_id);
-			++(m_ptr->weight);
-			broadcast_update(all_ifs, m_ptr);
-			LOG_INFO("start new self broadcasting");
-			self_update(all_ifs);
-			free(m_ptr);
-		} else {
-			LOG_INFO("No new update.");
-		}
-	}
-
-	return 0;
-}
-
 struct ifaddrs*
 find_recv_if(struct ifaddrs* all_ifs, struct sockaddr_in* addr)
 {
@@ -455,19 +409,90 @@ find_recv_if(struct ifaddrs* all_ifs, struct sockaddr_in* addr)
 	return NULL;
 }
 
-struct thread_arg {
+struct thread_args {
 	struct ifaddrs*        all_ifs;
 	struct routing_table*  table;
 	struct update_message* m_ptr_own;
 	struct sockaddr_in     sender_addr;
 };
 
+struct thread_args*
+make_thread_args()
+{
+	return calloc(1, sizeof(struct thread_args));
+}
+
+void
+milisecond_sleep(unsigned long msec)
+{
+	struct timespec ts;
+	ts.tv_sec  = msec / 1000;
+	ts.tv_nsec = (msec % 1000) * 1000000;
+	nanosleep(&ts, &ts);
+}
+
 void*
-receive_main_loop(void* arg)
+decision(void* arg_own)
+{
+	CLEANUP_FREE struct thread_args* args = (struct thread_args*)arg_own;
+
+	CLEANUP_FREE struct update_message* m_ptr = args->m_ptr_own;
+
+	struct ifaddrs* recv_if = find_recv_if(args->all_ifs, &(args->sender_addr));
+	if (!recv_if) {
+		LOG_WARN("message from unkonwn source. dispose.");
+		return (void*)-1;
+	} else {
+		LOG_INFO("receiver found. start decision process.");
+	}
+
+	if (!check_if_valid_ASPATH(m_ptr)) {
+		LOG_INFO(
+		    "[%s] circle detected. invalid ASPATH. skip current update message.",
+		    recv_if->ifa_name);
+		return (void*)0;
+	}
+
+	struct route_entry new_route = make_routing_from_update(m_ptr, recv_if);
+
+	if (m_ptr->type == MWITHDRAW) {
+		LOG_INFO("WITHDRAW update.");
+		if (withdraw_route(args->table, &new_route) == SWITHDREW) {
+			LOG_INFO("WITHDRAW finished. start broadcast to peers");
+			broadcast_update(args->all_ifs, m_ptr);
+		} else {
+			LOG_INFO("No new update.");
+		}
+
+	} else if (m_ptr->type == MADD) {
+		LOG_INFO("ADD update received.");
+		if (add_new_route(args->table, &new_route) == SNEW) {
+			LOG_INFO("ADD finished. start broadcast to peers");
+			m_ptr = add_aspath(m_ptr, host_id);
+			++(m_ptr->weight);
+			broadcast_update(args->all_ifs, m_ptr);
+
+			milisecond_sleep(20);
+
+			LOG_INFO("start new self broadcasting");
+			self_update(args->all_ifs);
+
+			log_routing_table(args->table);
+		} else {
+			LOG_INFO("No new update.");
+		}
+	}
+
+	return (void*)0;
+}
+
+void*
+receive_main_loop(void* arg_own)
 {
 	pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, NULL);
-	// struct ifaddrs* all_ifs = (struct ifaddrs*)arg;
-	struct thread_arg* args = (struct thread_arg*)arg;
+
+	CLEANUP_FREE struct thread_args* args = (struct thread_args*)arg_own;
+
 	while (1) {
 		char               buffer[MAX_MESSAGE_SIZE];
 		struct sockaddr_in sender_addr;
@@ -478,17 +503,27 @@ receive_main_loop(void* arg)
 			LOG_WARN("failed to receive message. skip.");
 		} else {
 			LOG_INFO("message received.");
-			struct ifaddrs* recv_if = find_recv_if(args->all_ifs, &sender_addr);
-			if (!recv_if) {
-				LOG_WARN("message from unkonwn source. dispose.");
-			} else {
-				LOG_INFO("receiver found. start decision process.");
 
-				decision(args->all_ifs,
-				         recv_if,
-				         make_message_from_buffer(buffer, MAX_MESSAGE_SIZE),
-				         args->table);
-				log_routing_table(args->table);
+			struct thread_args* decision_args_own = make_thread_args();
+
+			decision_args_own->all_ifs = args->all_ifs;
+			decision_args_own->m_ptr_own =
+			    make_message_from_buffer(buffer, MAX_MESSAGE_SIZE);
+			decision_args_own->sender_addr = sender_addr;
+			decision_args_own->table       = args->table;
+
+			pthread_t tid;
+
+			int ret = pthread_create(&tid,
+			                         NULL,
+			                         decision,
+			                         (void*)MOVE_OUT(decision_args_own));
+			if (ret) {
+				LOG_ERROR("failed to create thread. abort.");
+			} else {
+				pthread_detach(tid);
+				LOG_INFO("thread for receive message dispatched. tid: %lu",
+				         tid);
 			}
 		}
 		pthread_testcancel();
@@ -496,9 +531,15 @@ receive_main_loop(void* arg)
 }
 
 int
-dispatch(struct ifaddrs* all_ifs, pthread_t* tid)
+dispatch(struct ifaddrs* all_ifs, struct routing_table* table, pthread_t* tid)
 {
-	int ret = pthread_create(tid, NULL, receive_main_loop, (void*)all_ifs);
+	struct thread_args* args = make_thread_args();
+
+	args->all_ifs = all_ifs;
+	args->table   = table;
+
+	int ret =
+	    pthread_create(tid, NULL, receive_main_loop, (void*)MOVE_OUT(args));
 	if (ret) {
 		LOG_ERROR("failed to create thread. abort.");
 		return ret;
@@ -565,7 +606,7 @@ main(void)
 	self_update(selected_ifs);
 
 	pthread_t tid;
-	if (dispatch(selected_ifs, &tid)) {
+	if (dispatch(selected_ifs, &table, &tid)) {
 		LOG_ERROR("thread creation failed. exit.");
 		goto CLEAN_UP;
 	}

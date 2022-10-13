@@ -6,6 +6,7 @@ cc_library(
     hdrs = ["message.h"],
     deps = [
         "//utils/logger",
+        "//utils/mem",
     ],
     visibility = ["//visibility:public"],
 )
