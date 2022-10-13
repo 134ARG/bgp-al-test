@@ -4,8 +4,8 @@ cc_library(
     name = "ifaddrs",
     srcs = ["ifaddrs.c"],
     hdrs = ["ifaddrs.h"],
+    visibility = ["//visibility:public"],
     deps = [
         "//utils/logger",
     ],
-    visibility = ["//visibility:public"],
 )

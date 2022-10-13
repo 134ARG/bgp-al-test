@@ -4,10 +4,10 @@ cc_binary(
     name = "bgp",
     srcs = ["main.c"],
     deps = [
-       "//utils/logger",
-       "//utils/mem",
-       "//protocol/bgp",
-       "//routing/bgp",
-       "//utils/ifaddrs",
+        "//protocol/bgp",
+        "//routing/bgp",
+        "//utils/ifaddrs",
+        "//utils/logger",
+        "//utils/mem",
     ],
 )

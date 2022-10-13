@@ -1,3 +1,12 @@
+FIND_CMD := find . \( -path ./client \
+-o -path ./protocol \
+-o -path ./routing \
+-o -path ./utils \) \
+-o -type f -name
+BUILD_FILES := $(shell $(FIND_CMD) BUILD | fgrep BUILD)
+H_FILES := $(shell $(FIND_CMD) '*.h' | fgrep .h)
+C_FILES := $(shell $(FIND_CMD) '*.c' | fgrep .c)
+
 bgp-client:
 	bazel build //client/bgp 
 
@@ -12,3 +21,8 @@ run-bgp: bgp-client
 
 clean:
 	# git clean -fdx
+
+fmt:
+	buildifier $(BUILD_FILES)
+	clang-format -i $(H_FILES)
+	clang-format -i $(C_FILES)

@@ -4,9 +4,9 @@ cc_library(
     name = "bgp",
     srcs = ["message.c"],
     hdrs = ["message.h"],
+    visibility = ["//visibility:public"],
     deps = [
         "//utils/logger",
         "//utils/mem",
     ],
-    visibility = ["//visibility:public"],
 )

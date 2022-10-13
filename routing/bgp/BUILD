@@ -4,9 +4,9 @@ cc_library(
     name = "bgp",
     srcs = ["routing.c"],
     hdrs = ["routing.h"],
-    deps = [
-        "//utils/logger",
-        "//protocol/bgp",
-    ],
     visibility = ["//visibility:public"],
+    deps = [
+        "//protocol/bgp",
+        "//utils/logger",
+    ],
 )
