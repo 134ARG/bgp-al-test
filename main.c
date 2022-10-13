@@ -643,11 +643,6 @@ decision(struct ifaddrs* all_ifs,
 	return 0;
 }
 
-struct thread_arg {
-	struct ifaddrs* recv_if;
-	struct ifaddrs* all_ifs;
-};
-
 struct ifaddrs*
 find_recv_if(struct ifaddrs* all_ifs, struct sockaddr_in* addr)
 {
