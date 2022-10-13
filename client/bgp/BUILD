@@ -8,5 +8,6 @@ cc_binary(
        "//utils/mem",
        "//protocol/bgp",
        "//routing/bgp",
+       "//utils/ifaddrs",
     ],
 )
