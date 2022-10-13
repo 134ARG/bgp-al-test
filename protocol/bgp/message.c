@@ -11,6 +11,19 @@ make_message()
 	return p;
 }
 
+struct update_message*
+make_message_from_buffer(char* buffer, int len)
+{
+	struct update_message* msg = (struct update_message*)buffer;
+	if (len < msg->size) {
+		LOG_ERROR("incompelete message. parsing abort.");
+		return NULL;
+	}
+	struct update_message* ret = malloc(msg->size);
+	memcpy(ret, msg, msg->size);
+	return ret;
+}
+
 void
 free_message(struct update_message* ptr)
 {

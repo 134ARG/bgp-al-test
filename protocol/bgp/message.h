@@ -19,6 +19,8 @@ struct update_message {
 
 struct update_message* make_message();
 
+struct update_message* make_message_from_buffer(char* buffer, int len);
+
 void free_message(struct update_message* ptr);
 
 struct update_message* add_aspath(struct update_message* m_ptr,
