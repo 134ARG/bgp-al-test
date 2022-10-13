@@ -1,15 +1,11 @@
-client:
-	gcc ./main.c ./logger/logger.c -o test-client
+bgp-client:
+	bazel build //client/bgp 
 
-client-debug:
-	gcc -g ./main.c ./logger/logger.c -o test-client
-
-exec:
-	cp ./test-client /tmp/
-	rm ./test-client
+bgp-exec:
+	cp bazel-bin/client/bgp/bgp /tmp/test-client
 	sudo python ./mininet-test.py
 
-run: client exec
+run: bgp-client bgp-exec
 
 clean:
-	rm ./test-client
+	# git clean -fdx

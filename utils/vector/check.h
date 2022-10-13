@@ -5,7 +5,7 @@
 #ifndef ZLISP_CHECK_H
 #define ZLISP_CHECK_H
 
-#include "../logger/logger.h"
+#include "utils/logger/logger.h"
 #include <error.h>
 
 #define CHECK_OK(status)                                                       \
